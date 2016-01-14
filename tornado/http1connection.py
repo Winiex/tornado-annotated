@@ -153,13 +153,20 @@ class HTTP1Connection(httputil.HTTPConnection):
     @gen.coroutine
     def _read_message(self, delegate):
         need_delegate_close = False
+        import ipdb; ipdb.set_trace()
         try:
+            # 这一句会从 iostream 里异步地读取 header 的内容，返回的是一个将会填充
+            # header 内容的值的 future 对象。
+            # HTTP 协议中，header 和 body 之间使用类似于 \r\n\r\n 这样的标志来划分，
+            # 所以作者传入了下面的正则来保证刚好读完 header 的信息
             header_future = self.stream.read_until_regex(
                 b"\r?\n\r?\n",
                 max_bytes=self.params.max_header_size)
             if self.params.header_timeout is None:
                 header_data = yield header_future
             else:
+                # 如果设置了 timeout，则将 Future 对象转化为一个 gen._Timeout 对象，让 iostream 在
+                # 限定时间内去填充 future 对象内的 result，否则会报超时的错。
                 try:
                     header_data = yield gen.with_timeout(
                         self.stream.io_loop.time() + self.params.header_timeout,
