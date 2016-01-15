@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8 -*-
 #
 # Copyright 2014 Facebook
 #
@@ -19,7 +20,8 @@
 .. versionadded:: 4.0
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import re
 
@@ -153,11 +155,12 @@ class HTTP1Connection(httputil.HTTPConnection):
     @gen.coroutine
     def _read_message(self, delegate):
         need_delegate_close = False
-        import ipdb; ipdb.set_trace()
         try:
-            # 这一句会从 iostream 里异步地读取 header 的内容，返回的是一个将会填充
+            # 这一句会从 iostream 里异步地读取 header
+            # 的内容，返回的是一个将会填充
             # header 内容的值的 future 对象。
-            # HTTP 协议中，header 和 body 之间使用类似于 \r\n\r\n 这样的标志来划分，
+            # HTTP 协议中，header 和 body 之间使用类似于 \r\n\r\n
+            # 这样的被称为 CRLF 的字符串来划分，
             # 所以作者传入了下面的正则来保证刚好读完 header 的信息
             header_future = self.stream.read_until_regex(
                 b"\r?\n\r?\n",
@@ -165,17 +168,21 @@ class HTTP1Connection(httputil.HTTPConnection):
             if self.params.header_timeout is None:
                 header_data = yield header_future
             else:
-                # 如果设置了 timeout，则将 Future 对象转化为一个 gen._Timeout 对象，让 iostream 在
+                # 如果设置了 timeout，则将 Future 对象转化为一个
+                # gen._Timeout 对象，让 iostream 在
                 # 限定时间内去填充 future 对象内的 result，否则会报超时的错。
                 try:
                     header_data = yield gen.with_timeout(
-                        self.stream.io_loop.time() + self.params.header_timeout,
+                        self.stream.io_loop.time() +
+                        self.params.header_timeout,
                         header_future,
                         io_loop=self.stream.io_loop,
                         quiet_exceptions=iostream.StreamClosedError)
                 except gen.TimeoutError:
                     self.close()
                     raise gen.Return(False)
+
+            import ipdb; ipdb.set_trace()
             start_line, headers = self._parse_headers(header_data)
             if self.is_client:
                 start_line = httputil.parse_response_start_line(start_line)
@@ -479,7 +486,12 @@ class HTTP1Connection(httputil.HTTPConnection):
             future.set_result(None)
 
     def _can_keep_alive(self, start_line, headers):
+        # 这个方法会根据头信息，并结合 HTTP 版本来判断客户端对于连接的 keep-alive
+        # 属性的需求。
+        # start_line 是 HTTP 请求中的头部信息，包含了 HTTP 方法、请求的 Path 以及
+        # HTTP 协议的版本，headers 则包含了请求中包含的头信息。
         if self.params.no_keep_alive:
+            # 如果在 HTTP 参数中明确制定 no keep alive，则直接返回 False
             return False
         connection_header = headers.get("Connection")
         if connection_header is not None:
