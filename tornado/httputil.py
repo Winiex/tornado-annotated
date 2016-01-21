@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8 -*-
 #
 # Copyright 2009 Facebook
 #
@@ -20,7 +21,8 @@ This module also defines the `HTTPServerRequest` class which is exposed
 via `tornado.web.RequestHandler.request`.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import calendar
 import collections
@@ -188,7 +190,8 @@ class HTTPHeaders(collections.MutableMapping):
     def parse(cls, headers):
         """Returns a dictionary from HTTP header text.
 
-        >>> h = HTTPHeaders.parse("Content-Type: text/html\\r\\nContent-Length: 42\\r\\n")
+        >>> h = HTTPHeaders.parse("Content-Type: text/html" +
+                                  "\\r\\nContent-Length: 42\\r\\n")
         >>> sorted(h.items())
         [('Content-Length', '42'), ('Content-Type', 'text/html')]
         """
@@ -538,7 +541,8 @@ class HTTPConnection(object):
 
         :arg start_line: a `.RequestStartLine` or `.ResponseStartLine`.
         :arg headers: a `.HTTPHeaders` instance.
-        :arg chunk: the first (optional) chunk of data.  This is an optimization
+        :arg chunk: the first (optional) chunk of data.
+            This is an optimization
             so that small responses can be written in the same call as their
             headers.
         :arg callback: a callback to be run when the write is complete.
@@ -624,7 +628,8 @@ def _parse_request_range(range_header):
 
     See [0] for the details of the range header.
 
-    [0]: http://greenbytes.de/tech/webdav/draft-ietf-httpbis-p5-range-latest.html#byte.ranges
+    [0]: http://greenbytes.de/tech/webdav/draft-
+    ietf-httpbis-p5-range-latest.html#byte.ranges
     """
     unit, _, value = range_header.partition("=")
     unit, value = unit.strip(), value.strip()
@@ -683,7 +688,9 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
         return
     if content_type.startswith("application/x-www-form-urlencoded"):
         try:
-            uri_arguments = parse_qs_bytes(native_str(body), keep_blank_values=True)
+            uri_arguments = parse_qs_bytes(
+                native_str(body), keep_blank_values=True
+            )
         except Exception as e:
             gen_log.warning('Invalid x-www-form-urlencoded body: %s', e)
             uri_arguments = {}

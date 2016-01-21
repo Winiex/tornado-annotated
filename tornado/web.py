@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8 -*-
 #
 # Copyright 2009 Facebook
 #
@@ -1860,6 +1861,8 @@ class Application(httputil.HTTPServerConnectionDelegate):
         self.transforms.append(transform_class)
 
     def _get_host_handlers(self, request):
+        # 该方法会根据 request 中包含的 Host
+        # 信息来找到符合要求的 Handler 对象
         host = split_host_and_port(request.host.lower())[0]
         matches = []
         for pattern, handlers in self.handlers:
@@ -1958,6 +1961,11 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         self.path_kwargs = {}
 
     def headers_received(self, start_line, headers):
+        # 当服务端收到了请求的 Header 数据时，会将其封装好后传入该方法
+        # 其中 start_line 是 tornado.httputil.RequestStartLine 对象，
+        # headers 是 tornado.httputil.HTTPHeaders 对象。它们分别对 Header
+        # 中的首行信息（包括 HTTP 方法、请求的路径以及 HTTP 协议版本）、
+        # 以及 HTTP Header 的具体参数键值对进行了封装。
         self.set_request(httputil.HTTPServerRequest(
             connection=self.connection, start_line=start_line,
             headers=headers))
@@ -1967,20 +1975,31 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
 
     def set_request(self, request):
         self.request = request
+        # 根据请求信息来进一步该使用哪个 handler 来处理请求
         self._find_handler()
+        # 判断请求是否是流式的
         self.stream_request_body = _has_stream_request_body(self.handler_class)
 
     def _find_handler(self):
         # Identify the handler to use as soon as we have the request.
         # Save url path arguments for later.
+
+        # app 即为我们定义后传入 HTTPServer 对象的 Application
         app = self.application
+        # 先尝试拿到满足请求 host 信息的 handler 对象们
         handlers = app._get_host_handlers(self.request)
         if not handlers:
+            # 如果没有，则根据 app 的默认 host 设置，将处理请求的 handler
+            # 对象设置为重定向 Handler
             self.handler_class = RedirectHandler
             self.handler_kwargs = dict(url="%s://%s/"
                                        % (self.request.protocol,
                                           app.default_host))
             return
+
+        # 接下来进一步根据请求中的 path 信息来匹配 handler
+        # 从代码逻辑可以看出，匹配是根据路由规则的定义顺序来的，最终命中的
+        # 是第一个匹配到的 handler
         for spec in handlers:
             match = spec.regex.match(self.request.path)
             if match:
@@ -1999,11 +2018,15 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
                         self.path_args = [_unquote_or_none(s)
                                           for s in match.groups()]
                 return
+
+        # 在根据 host 有匹配到，但根据 path 没有匹配到时，则将 app 设置中的默认
+        # handler 作为处理请求的 handler
         if app.settings.get('default_handler_class'):
             self.handler_class = app.settings['default_handler_class']
             self.handler_kwargs = app.settings.get(
                 'default_handler_args', {})
         else:
+            # 若默认 handler 也没有设置，则设置错误 Handler 并抛出 404 异常页面
             self.handler_class = ErrorHandler
             self.handler_kwargs = dict(status_code=404)
 
@@ -2017,8 +2040,10 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             self.request.body.set_result(None)
         else:
+            # 根据 HTTP 请求信息来把 body 中包含的数据 parse 成字典
             self.request.body = b''.join(self.chunks)
             self.request._parse_body()
+            # 执行我们定义的 Handler 从而返回结果
             self.execute()
 
     def on_connection_close(self):

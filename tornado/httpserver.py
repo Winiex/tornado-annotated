@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf8 -*-
 #
 # Copyright 2009 Facebook
 #
@@ -26,12 +27,14 @@ class except to start a server at the beginning of the process
    to `tornado.httputil.HTTPServerRequest`.  The old name remains as an alias.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import socket
 
 from tornado.escape import native_str
-from tornado.http1connection import HTTP1ServerConnection, HTTP1ConnectionParameters
+from tornado.http1connection import HTTP1ServerConnection, \
+    HTTP1ConnectionParameters
 from tornado import gen
 from tornado import httputil
 from tornado import iostream
@@ -84,7 +87,8 @@ class HTTPServer(TCPServer, Configurable,
        In many cases, `tornado.web.Application.listen` can be used to avoid
        the need to explicitly create the `HTTPServer`.
 
-    2. `~tornado.tcpserver.TCPServer.bind`/`~tornado.tcpserver.TCPServer.start`:
+    2. `~tornado.tcpserver.TCPServer.bind`/
+    `~tornado.tcpserver.TCPServer.start`:
        simple multi-process::
 
             server = HTTPServer(app)
@@ -265,6 +269,10 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
             self._chunks = []
 
     def headers_received(self, start_line, headers):
+        # 在 http1connection.py 的 _read_message 方法中会调用这个方法，
+        # 该方法主要用于处理在 _read_message 中获得到的 HTTP
+        # 头信息，并进而根据处理的结果，调用相应的 _RequestDispatcher
+        # 的处理方法来处理头部信息。
         if self.server.xheaders:
             self.connection.context._apply_xheaders(headers)
         if self.delegate is None:
@@ -272,6 +280,8 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
                 connection=self.connection, start_line=start_line,
                 headers=headers)
         else:
+            # 这个方法调用后，会在 _RequestHandler 对象中设置好处理响应请求的
+            # handler 对象
             return self.delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):
@@ -286,6 +296,7 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
             self.request._parse_body()
             self.server.request_callback(self.request)
         else:
+            # 在这里调用我们注册的 Handler 来处理返回结果
             self.delegate.finish()
         self._cleanup()
 

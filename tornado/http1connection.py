@@ -182,7 +182,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                     self.close()
                     raise gen.Return(False)
 
-            import ipdb; ipdb.set_trace()
             start_line, headers = self._parse_headers(header_data)
             if self.is_client:
                 start_line = httputil.parse_response_start_line(start_line)
@@ -195,7 +194,10 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
             need_delegate_close = True
+
             with _ExceptionLoggingContext(app_log):
+                # 在这个 Context 之下，如果代码抛出异常，将会把 exception 的信息
+                # 用 app_log 当做日志输出
                 header_future = delegate.headers_received(start_line, headers)
                 if header_future is not None:
                     yield header_future
@@ -205,6 +207,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                 raise gen.Return(False)
             skip_body = False
             if self.is_client:
+                # 如果使用这个连接的对象是客户端类型的，则进行头信息以及
+                # HTTP 状态码来决定是否继续读取 body 数据
                 if (self._request_start_line is not None and
                         self._request_start_line.method == 'HEAD'):
                     skip_body = True
@@ -229,15 +233,18 @@ class HTTP1Connection(httputil.HTTPConnection):
                         not self._write_finished):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
             if not skip_body:
+                # 经过前面的各种条件判断后，该请求依然需要读取 body 的数据
                 body_future = self._read_body(
-                    start_line.code if self.is_client else 0, headers, delegate)
+                    start_line.code if self.is_client
+                    else 0, headers, delegate)
                 if body_future is not None:
                     if self._body_timeout is None:
                         yield body_future
                     else:
                         try:
                             yield gen.with_timeout(
-                                self.stream.io_loop.time() + self._body_timeout,
+                                self.stream.io_loop.time() +
+                                self._body_timeout,
                                 body_future, self.stream.io_loop,
                                 quiet_exceptions=iostream.StreamClosedError)
                         except gen.TimeoutError:
@@ -247,7 +254,10 @@ class HTTP1Connection(httputil.HTTPConnection):
                             raise gen.Return(False)
             self._read_finished = True
             if not self._write_finished or self.is_client:
+                # 服务端在这里便会调用到匹配到的 handler
+                # 来向请求方写回返回数据
                 need_delegate_close = False
+                import ipdb; ipdb.set_trace()
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
             # If we're waiting for the application to produce an asynchronous
