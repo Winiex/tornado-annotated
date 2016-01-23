@@ -1,3 +1,4 @@
+# -*- coding: utf8 -*-
 """``tornado.gen`` is a generator-based interface to make it easier to
 work in an asynchronous environment.  Code using the ``gen`` module
 is technically asynchronous, but it is written as a single generator
@@ -74,7 +75,8 @@ See the `convert_yielded` function to extend this mechanism.
    via ``singledispatch``.
 
 """
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import collections
 import functools
@@ -280,12 +282,14 @@ def _make_coroutine_wrapper(func, replace_callback):
                 try:
                     orig_stack_contexts = stack_context._state.contexts
                     yielded = next(result)
-                    if stack_context._state.contexts is not orig_stack_contexts:
+                    if stack_context._state.contexts is \
+                            not orig_stack_contexts:
                         yielded = TracebackFuture()
                         yielded.set_exception(
                             stack_context.StackContextInconsistentError(
                                 'stack_context inconsistency (probably caused '
-                                'by yield within a "with StackContext" block)'))
+                                'by yield within a "with StackContext" block)')
+                        )
                 except (StopIteration, Return) as e:
                     future.set_result(_value_from_stopiteration(e))
                 except Exception:
@@ -295,9 +299,9 @@ def _make_coroutine_wrapper(func, replace_callback):
                 try:
                     return future
                 finally:
-                    # Subtle memory optimization: if next() raised an exception,
-                    # the future's exc_info contains a traceback which
-                    # includes this stack frame.  This creates a cycle,
+                    # Subtle memory optimization: if next() raised an
+                    # exception, the future's exc_info contains a traceback
+                    # which includes this stack frame.  This creates a cycle,
                     # which will be collected at the next full GC but has
                     # been shown to greatly increase memory usage of
                     # benchmarks (relative to the refcount-based scheme
@@ -600,7 +604,9 @@ class YieldFuture(YieldPoint):
             self.runner = runner
             self.key = object()
             runner.register_callback(self.key)
-            self.io_loop.add_future(self.future, runner.result_callback(self.key))
+            self.io_loop.add_future(
+                self.future, runner.result_callback(self.key)
+            )
         else:
             self.runner = None
             self.result_fn = self.future.result
@@ -927,6 +933,12 @@ Usage: ``yield gen.moment``
 moment.set_result(None)
 
 
+# Runner 会执行一个 coroutine 内的代码，直到其返回。Runner 会将每次 yield 的
+# 执行结果作为继续执行的值传入 coroutine，这个结果会作为 yield 的返回值。
+# 如果一个 coroutine 里面有多次 yield 行为，Runner 会保证这些 yield 被
+# 依次执行，并让 coroutine 最终执行完毕返回最终结果。
+# 对于需要异步执行的操作，Runner 会交给 IOLoop 代劳，等起执行完毕后再讲结果
+# 交回给 coroutine。
 class Runner(object):
     """Internal implementation of `tornado.gen.engine`.
 
@@ -1016,11 +1028,13 @@ class Runner(object):
                     else:
                         yielded = self.gen.send(value)
 
-                    if stack_context._state.contexts is not orig_stack_contexts:
+                    if stack_context._state.contexts \
+                            is not orig_stack_contexts:
                         self.gen.throw(
                             stack_context.StackContextInconsistentError(
                                 'stack_context inconsistency (probably caused '
-                                'by yield within a "with StackContext" block)'))
+                                'by yield within a "with StackContext" block)')
+                        )
                 except (StopIteration, Return) as e:
                     self.finished = True
                     self.future = _null_future

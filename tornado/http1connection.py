@@ -257,7 +257,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # 服务端在这里便会调用到匹配到的 handler
                 # 来向请求方写回返回数据
                 need_delegate_close = False
-                import ipdb; ipdb.set_trace()
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
             # If we're waiting for the application to produce an asynchronous
