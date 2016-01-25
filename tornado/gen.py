@@ -965,6 +965,8 @@ class Runner(object):
         # of the coroutine.
         self.stack_context_deactivate = None
         if self.handle_yield(first_yielded):
+            # handle_yield 在 coroutine yield 的对象有了结果时返回
+            # True，这个时候就会马上执行 run 方法。
             self.run()
 
     def register_callback(self, key):
@@ -1004,12 +1006,15 @@ class Runner(object):
         yield point that is not ready.
         """
         if self.running or self.finished:
+            # 如果 run 方法已经在被执行，则返回。
             return
         try:
             self.running = True
             while True:
                 future = self.future
                 if not future.done():
+                    # Runner 对应的 coroutine yield
+                    # 的对象还没有准备好，则返回。
                     return
                 self.future = None
                 try:
@@ -1019,13 +1024,20 @@ class Runner(object):
                     try:
                         value = future.result()
                     except Exception:
+                        # 如果执行过程中有抛出异常，则捕获之，并让 coroutine
+                        # 也抛出该异常。Python 中的 generator 在 2.5 版本后才
+                        # 提供了 throw 方法来提供实现 coroutine
+                        # 的可能性，详情可以参考：
+                        # https://www.python.org/dev/peps/pep-0342/
                         self.had_exception = True
                         exc_info = sys.exc_info()
 
                     if exc_info is not None:
+                        # 如果有异常，让 coroutine 抛出。
                         yielded = self.gen.throw(*exc_info)
                         exc_info = None
                     else:
+                        # 如果一切正常，则将结果反馈给 coroutine。
                         yielded = self.gen.send(value)
 
                     if stack_context._state.contexts \
@@ -1036,6 +1048,7 @@ class Runner(object):
                                 'by yield within a "with StackContext" block)')
                         )
                 except (StopIteration, Return) as e:
+                    # coroutine 的执行绪执行完毕，Runner 的任务也完成了。
                     self.finished = True
                     self.future = _null_future
                     if self.pending_callbacks and not self.had_exception:
@@ -1046,6 +1059,8 @@ class Runner(object):
                         raise LeakedCallbackError(
                             "finished without waiting for callbacks %r" %
                             self.pending_callbacks)
+                    # 从 Exception 对象中获得最终结果，并反馈给
+                    # result_future，进而触发 result_future 的 done callbacks。
                     self.result_future.set_result(_value_from_stopiteration(e))
                     self.result_future = None
                     self._deactivate_stack_context()
@@ -1063,9 +1078,16 @@ class Runner(object):
             self.running = False
 
     def handle_yield(self, yielded):
+        # handle_yield 方法会对 coroutine yield 的结果进行转化，进而判断 yield
+        # 的异步执行的代码是否已经执行完毕并且已经得到了结果，如果没有，则将相
+        # 应得 future 对象放到 Event Loop 中，等待下一次 Event Loop
+        # 执行到时再判断执行结果
+
         # Lists containing YieldPoints require stack contexts;
         # other lists are handled in convert_yielded.
         if _contains_yieldpoint(yielded):
+            # 如果 coroutine yield 的结果中包含 YieldPoint，则用 stack context
+            # 将其包装一次
             yielded = multi(yielded)
 
         if isinstance(yielded, YieldPoint):
@@ -1100,6 +1122,8 @@ class Runner(object):
             else:
                 start_yield_point()
         else:
+            # 经过前面的处理，YieldPoint 都已经被正确包装、转化，接下来就可以将
+            # coroutine yield 的内容转化成一个 future 对象。
             try:
                 self.future = convert_yielded(yielded)
             except BadYieldError:
@@ -1107,9 +1131,17 @@ class Runner(object):
                 self.future.set_exc_info(sys.exc_info())
 
         if not self.future.done() or self.future is moment:
+            # 如果 future 还没有收到结果，不是 done 的状态，则将其添加到 IOLoop
+            # 实例中，在后续某一次 Event Loop 中，future 被赋予了结果后在去执行
+            # run 方法，从而让 coroutine 获得结果并继续执行下去。
             self.io_loop.add_future(
                 self.future, lambda f: self.run())
+            # 这时便不用去执行 run 方法去获得 future 中的结果并反馈给 coroutine
+            # 了，一切都等到之后的 Event Loop 中见分晓。
             return False
+
+        # Future 对象这个时候已经有了结果，便可以去执行 run 方法，并将结果反馈给
+        # coroutine，让之继续后面的执行绪了。
         return True
 
     def result_callback(self, key):
