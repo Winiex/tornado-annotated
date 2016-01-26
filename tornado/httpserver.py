@@ -281,7 +281,8 @@ class _ServerRequestAdapter(httputil.HTTPMessageDelegate):
                 headers=headers)
         else:
             # 这个方法调用后，会在 _RequestHandler 对象中设置好处理响应请求的
-            # handler 对象
+            # handler 对象。在这个方法调用前 self.delegate.handler_class 是
+            # None，调用之后便是匹配到的 Handler class。
             return self.delegate.headers_received(start_line, headers)
 
     def data_received(self, chunk):

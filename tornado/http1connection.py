@@ -198,6 +198,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 self._request_start_line = start_line
                 self._request_headers = headers
 
+            # 根据头信息来判断连接的保持规则。
             self._disconnect_on_finish = not self._can_keep_alive(
                 start_line, headers)
             need_delegate_close = True
@@ -241,8 +242,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                 if (headers.get("Expect") == "100-continue" and
                         not self._write_finished):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
+
             if not skip_body:
-                # 经过前面的各种条件判断后，该请求依然需要读取 body 的数据
                 body_future = self._read_body(
                     start_line.code if self.is_client
                     else 0, headers, delegate)
@@ -268,6 +269,7 @@ class HTTP1Connection(httputil.HTTPConnection):
                 need_delegate_close = False
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
+
             # If we're waiting for the application to produce an asynchronous
             # response, and we're not detached, register a close callback
             # on the stream (we didn't need one while we were reading)
