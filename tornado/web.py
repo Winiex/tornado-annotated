@@ -2079,6 +2079,8 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
                                           **self.handler_kwargs)
         transforms = [t(self.request) for t in self.application.transforms]
 
+        # RequestHandler 的 _prepared_future 只有在 stream 的情况下才会被
+        # 初始化，否则一般在执行完 execute 方法后都会返回为 None。
         if self.stream_request_body:
             self.handler._prepared_future = Future()
         # Note that if an exception escapes handler._execute it will be

@@ -209,6 +209,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # 将解析好的头信息交给 delegate，这时对于服务端来说，会根据
                 # start line 中的 path 信息来匹配处理请求的那个 Handler。
                 header_future = delegate.headers_received(start_line, headers)
+
+                # 在 stream 的情况下，header_future 则不会是 None。
                 if header_future is not None:
                     yield header_future
             if self.stream is None:
@@ -367,7 +369,8 @@ class HTTP1Connection(httputil.HTTPConnection):
         lines = []
         if self.is_client:
             self._request_start_line = start_line
-            lines.append(utf8('%s %s HTTP/1.1' % (start_line[0], start_line[1])))
+            lines.append(
+                utf8('%s %s HTTP/1.1' % (start_line[0], start_line[1])))
             # Client requests with a non-empty body must have either a
             # Content-Length or a Transfer-Encoding.
             self._chunking_output = (
@@ -376,13 +379,15 @@ class HTTP1Connection(httputil.HTTPConnection):
                 'Transfer-Encoding' not in headers)
         else:
             self._response_start_line = start_line
-            lines.append(utf8('HTTP/1.1 %s %s' % (start_line[1], start_line[2])))
+            lines.append(
+                utf8('HTTP/1.1 %s %s' % (start_line[1], start_line[2])))
             self._chunking_output = (
                 # TODO: should this use
                 # self._request_start_line.version or
                 # start_line.version?
                 self._request_start_line.version == 'HTTP/1.1' and
-                # 304 responses have no body (not even a zero-length body), and so
+                # 304 responses have no body (not even a
+                # zero-length body), and so
                 # should not have either Content-Length or Transfer-Encoding.
                 # headers.
                 start_line.code != 304 and
@@ -393,8 +398,8 @@ class HTTP1Connection(httputil.HTTPConnection):
                 'Transfer-Encoding' not in headers)
             # If a 1.0 client asked for keep-alive, add the header.
             if (self._request_start_line.version == 'HTTP/1.0' and
-                (self._request_headers.get('Connection', '').lower()
-                 == 'keep-alive')):
+                (self._request_headers.get(
+                    'Connection', '').lower() == 'keep-alive')):
                 headers['Connection'] = 'Keep-Alive'
         if self._chunking_output:
             headers['Transfer-Encoding'] = 'chunked'
@@ -518,9 +523,9 @@ class HTTP1Connection(httputil.HTTPConnection):
             connection_header = connection_header.lower()
         if start_line.version == "HTTP/1.1":
             return connection_header != "close"
-        elif ("Content-Length" in headers
-              or headers.get("Transfer-Encoding", "").lower() == "chunked"
-              or start_line.method in ("HEAD", "GET")):
+        elif ("Content-Length" in headers or
+              headers.get("Transfer-Encoding", "").lower() == "chunked" or
+              start_line.method in ("HEAD", "GET")):
             return connection_header == "keep-alive"
         return False
 
@@ -609,7 +614,8 @@ class HTTP1Connection(httputil.HTTPConnection):
 
     @gen.coroutine
     def _read_chunked_body(self, delegate):
-        # TODO: "chunk extensions" http://tools.ietf.org/html/rfc2616#section-3.6.1
+        # TODO: "chunk extensions"
+        # http://tools.ietf.org/html/rfc2616#section-3.6.1
         total_size = 0
         while True:
             chunk_len = yield self.stream.read_until(b"\r\n", max_bytes=64)
