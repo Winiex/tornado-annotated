@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Copyright 2009 Facebook
 #
@@ -24,7 +25,8 @@ Contents:
 * `PipeIOStream`: Pipe-based IOStream implementation.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import collections
 import errno
@@ -37,7 +39,8 @@ import re
 from tornado.concurrent import TracebackFuture
 from tornado import ioloop
 from tornado.log import gen_log, app_log
-from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
+from tornado.netutil import ssl_wrap_socket, ssl_match_hostname, \
+    SSLCertificateError, _client_ssl_defaults, _server_ssl_defaults
 from tornado import stack_context
 from tornado.util import errno_from_exception
 
@@ -66,7 +69,8 @@ _ERRNO_CONNRESET = (errno.ECONNRESET, errno.ECONNABORTED, errno.EPIPE,
                     errno.ETIMEDOUT)
 
 if hasattr(errno, "WSAECONNRESET"):
-    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED, errno.WSAETIMEDOUT)
+    _ERRNO_CONNRESET += (errno.WSAECONNRESET, errno.WSAECONNABORTED,
+                         errno.WSAETIMEDOUT)
 
 if sys.platform == 'darwin':
     # OSX appears to have a race condition that causes send(2) to return
@@ -379,8 +383,10 @@ class BaseIOStream(object):
         # so never put empty strings in the buffer.
         if data:
             if (self.max_write_buffer_size is not None and
-                    self._write_buffer_size + len(data) > self.max_write_buffer_size):
-                raise StreamBufferFullError("Reached maximum write buffer size")
+                    self._write_buffer_size + len(data) >
+                    self.max_write_buffer_size):
+                raise StreamBufferFullError(
+                    "Reached maximum write buffer size")
             # Break up large contiguous strings before inserting them in the
             # write buffer, so we don't have to recopy the entire thing
             # as we slice off pieces to send to the socket.
@@ -555,12 +561,14 @@ class BaseIOStream(object):
             except Exception:
                 app_log.error("Uncaught exception, closing connection.",
                               exc_info=True)
-                # Close the socket on an uncaught exception from a user callback
+                # Close the socket on an uncaught exception
+                # from a user callback
                 # (It would eventually get closed when the socket object is
                 # gc'd, but we don't want to rely on gc happening before we
                 # run out of file descriptors)
                 self.close(exc_info=True)
-                # Re-raise the exception so that IOLoop.handle_callback_exception
+                # Re-raise the exception so that
+                # IOLoop.handle_callback_exception
                 # can see it and log the error
                 raise
             finally:
@@ -658,6 +666,20 @@ class BaseIOStream(object):
             self._maybe_run_close_callback()
 
     def _set_read_callback(self, callback):
+        # IOStream 在支持异步
+        # IO，在异步读取数据完毕后，它需要将所获得的数据反馈给异步调
+        # 用的发起者，常见的范式是调用者传入一个
+        # callback 函数，然后被调用者将数据作为 callback 的参数传入。IOStream
+        # 支持这种范式。同时 IOStream 还支持另一种范式——Future、Promise 范式。
+        # 在这种范式下，调用完 IOStream 读取数据的方法后，该方法会返回一个
+        # future 对象，该对象的主要功能是作为调用者和 IOStream 之间沟通的桥梁，
+        # 待 IOStream 读取数据完毕后，会将结果填入 future 对象，进而调用者也可
+        # 从 future 对象中拿到结果。Tornado 中的 Future 甚至支持 Exception 的
+        # 传递。配合 IOLoop，在 Tornado 中可以最大化地减少阻塞并等待 future
+        # 对象中结果的时间，从而提高程序的执行效率。_set_read_callback
+        # 方法便会根据 callback 参数是否为 None 来选择设置 callback 函数，还是
+        # future 对象。关于 Future、Promise 范式，可以进一步参考：
+        # https://en.wikipedia.org/wiki/Futures_and_promises
         assert self._read_callback is None, "Already reading"
         assert self._read_future is None, "Already reading"
         if callback is not None:
@@ -667,6 +689,10 @@ class BaseIOStream(object):
         return self._read_future
 
     def _run_read_callback(self, size, streaming):
+        # 在 IOStream 找到设置的数据读取分割点后，会将分割出来的数据在 buffer
+        # 中的 pos 作为 size 参数传入本方法。在本方法中，则会根据
+        # callback、result future 的设置情况，来将应该读取的数据反馈给调用者。
+        # 从 buffer 中读取数据依赖 _consume 方法。
         if streaming:
             callback = self._streaming_callback
         else:
@@ -694,16 +720,22 @@ class BaseIOStream(object):
         """
         # See if we've already got the data from a previous read
         self._run_streaming_callback()
+        # 找到 buffer 内满足条件的数据的位置。
         pos = self._find_read_pos()
         if pos is not None:
+            # 如果找到了，则读取相应的数据，并把数据反馈给调用者。
             self._read_from_buffer(pos)
             return
         self._check_closed()
         try:
+            # 如果没找到，则补充 buffer 内包含的数据。这时会去调用 read_from_fd
+            # 方法，从监听的 socket 内获得数据并存入 buffer。同时该方法也会一并
+            # 将目标数据的位置作为返回值。
             pos = self._read_to_buffer_loop()
         except Exception:
             # If there was an in _read_to_buffer, we called close() already,
-            # but couldn't run the close callback because of _pending_callbacks.
+            # but couldn't run the close callback because
+            # of _pending_callbacks.
             # Before we escape from this function, run the close callback if
             # applicable.
             self._maybe_run_close_callback()
@@ -725,6 +757,7 @@ class BaseIOStream(object):
         to read (i.e. the read returns EWOULDBLOCK or equivalent).  On
         error closes the socket and raises an exception.
         """
+        # 调用 read_from_fd 方法并将获得数据存入 _read_buffer。
         while True:
             try:
                 chunk = self.read_from_fd()
@@ -776,9 +809,12 @@ class BaseIOStream(object):
         Returns a position in the buffer if the current read can be satisfied,
         or None if it cannot.
         """
+        # 根据设置的读取分隔条件来找到在 buffer 中的目标数据的位置，并返回之。
+        # 如果 buffer 中找不到目标数据位置，则返回 None。
         if (self._read_bytes is not None and
             (self._read_buffer_size >= self._read_bytes or
              (self._read_partial and self._read_buffer_size > 0))):
+            # 有直接指定的读取位置，则综合处理之并返回。
             num_bytes = min(self._read_bytes, self._read_buffer_size)
             return num_bytes
         elif self._read_delimiter is not None:
@@ -790,6 +826,8 @@ class BaseIOStream(object):
             # to be in the first few chunks.  Merge the buffer gradually
             # since large merges are relatively expensive and get undone in
             # _consume().
+
+            # 有指定的分隔字符，则遍历 buffer，找到第一个该字符并返回位置。
             if self._read_buffer:
                 while True:
                     loc = self._read_buffer[0].find(self._read_delimiter)
@@ -797,6 +835,8 @@ class BaseIOStream(object):
                         delimiter_len = len(self._read_delimiter)
                         self._check_max_bytes(self._read_delimiter,
                                               loc + delimiter_len)
+                        # 返回的位置所包含的数据内容，在 max bytes
+                        # 允许的情况下是会包含分隔字符本身的。
                         return loc + delimiter_len
                     if len(self._read_buffer) == 1:
                         break
@@ -804,11 +844,15 @@ class BaseIOStream(object):
                 self._check_max_bytes(self._read_delimiter,
                                       len(self._read_buffer[0]))
         elif self._read_regex is not None:
+            # 有指定的分隔正则表达式，则用该正则搜索
+            # buffer，找到第一个符合条件的位置并返回。
             if self._read_buffer:
                 while True:
                     m = self._read_regex.search(self._read_buffer[0])
                     if m is not None:
                         self._check_max_bytes(self._read_regex, m.end())
+                        # 返回的位置所包含的数据内容，在 max bytes
+                        # 允许的情况下是会包含正则匹配的内容的。
                         return m.end()
                     if len(self._read_buffer) == 1:
                         break
@@ -1168,7 +1212,8 @@ class IOStream(BaseIOStream):
             if orig_close_callback is not None:
                 orig_close_callback()
         ssl_stream.set_close_callback(close_callback)
-        ssl_stream._ssl_connect_callback = lambda: future.set_result(ssl_stream)
+        ssl_stream._ssl_connect_callback = \
+            lambda: future.set_result(ssl_stream)
         ssl_stream.max_buffer_size = self.max_buffer_size
         ssl_stream.read_chunk_size = self.read_chunk_size
         return future
@@ -1319,7 +1364,8 @@ class SSLIOStream(IOStream):
             verify_mode = self._ssl_options.get('cert_reqs', ssl.CERT_NONE)
         elif isinstance(self._ssl_options, ssl.SSLContext):
             verify_mode = self._ssl_options.verify_mode
-        assert verify_mode in (ssl.CERT_NONE, ssl.CERT_REQUIRED, ssl.CERT_OPTIONAL)
+        assert verify_mode in (ssl.CERT_NONE, ssl.CERT_REQUIRED,
+                               ssl.CERT_OPTIONAL)
         if verify_mode == ssl.CERT_NONE or self._server_hostname is None:
             return True
         cert = self.socket.getpeercert()

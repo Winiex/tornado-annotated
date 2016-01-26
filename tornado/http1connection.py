@@ -730,6 +730,7 @@ class HTTP1ServerConnection(object):
                 conn = HTTP1Connection(self.stream, False,
                                        self.params, self.context)
                 request_delegate = delegate.start_request(self, conn)
+                import ipdb; ipdb.set_trace()
                 try:
                     ret = yield conn.read_response(request_delegate)
                 except (iostream.StreamClosedError,
