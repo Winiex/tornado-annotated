@@ -182,6 +182,13 @@ class HTTP1Connection(httputil.HTTPConnection):
                     self.close()
                     raise gen.Return(False)
 
+            # 将 header 信息转化为保存有响应信息的对象。因为客户端和服务端中
+            # http 头信息的形式是不同的，所以要根据 connection 是客户端方还
+            # 是服务端方来作不同的处理。
+            # 客户端得到的为 start line 被叫做 status-line，结构类似于：
+            # HTTP/1.1 200 OK
+            # 服务端得到的 start line 被叫做
+            # request-line，结构类似于：GET / HTTP/1.1
             start_line, headers = self._parse_headers(header_data)
             if self.is_client:
                 start_line = httputil.parse_response_start_line(start_line)
@@ -195,9 +202,11 @@ class HTTP1Connection(httputil.HTTPConnection):
                 start_line, headers)
             need_delegate_close = True
 
+            # 在这个 Context 之下，如果代码抛出异常，将会把 exception 的信息
+            # 用 app_log 当做日志输出
             with _ExceptionLoggingContext(app_log):
-                # 在这个 Context 之下，如果代码抛出异常，将会把 exception 的信息
-                # 用 app_log 当做日志输出
+                # 将解析好的头信息交给 delegate，这时对于服务端来说，会根据
+                # start line 中的 path 信息来匹配处理请求的那个 Handler。
                 header_future = delegate.headers_received(start_line, headers)
                 if header_future is not None:
                     yield header_future
@@ -730,7 +739,6 @@ class HTTP1ServerConnection(object):
                 conn = HTTP1Connection(self.stream, False,
                                        self.params, self.context)
                 request_delegate = delegate.start_request(self, conn)
-                import ipdb; ipdb.set_trace()
                 try:
                     ret = yield conn.read_response(request_delegate)
                 except (iostream.StreamClosedError,
