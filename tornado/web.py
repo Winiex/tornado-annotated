@@ -913,6 +913,9 @@ class RequestHandler(object):
 
         # Automatically support ETags and add the Content-Length header if
         # we have not flushed any content yet.
+
+        # ETags 是 HTTP 协议中定义的一种辅助客户端利用缓存的机制，详情可见：
+        # https://en.wikipedia.org/wiki/HTTP_ETag
         if not self._headers_written:
             if (self._status_code == 200 and
                 self.request.method in ("GET", "HEAD") and
@@ -925,6 +928,7 @@ class RequestHandler(object):
                 assert not self._write_buffer, "Cannot send body with 304"
                 self._clear_headers_for_304()
             elif "Content-Length" not in self._headers:
+                # 计算返回数据的长度，从而填充 Content-Length 的 header。
                 content_length = sum(len(part) for part in self._write_buffer)
                 self.set_header("Content-Length", content_length)
 
@@ -1423,13 +1427,13 @@ class RequestHandler(object):
             # the proper cookie
             if self.request.method not in ("GET", "HEAD", "OPTIONS") and \
                     self.application.settings.get("xsrf_cookies"):
-                # 如果是会改变数据的写入性需求，并且程序有相关配置，则进行 XSRF
+                # 如果是会改变数据的写入性请求，并且程序有相关配置，则进行 XSRF
                 # 预防 Cookie 的检测。
                 # 关于 XSRF 漏洞的介绍及应对策略，可以参考：
                 # https://www.ibm.com/developerworks/cn/web/1102_niugang_csrf/
                 self.check_xsrf_cookie()
 
-            # 调用我们定义的 Handler 中的 prepare 函数
+            # 调用我们定义的 Handler 中的 prepare 函数。
             result = self.prepare()
             if result is not None:
                 result = yield result
@@ -1454,6 +1458,10 @@ class RequestHandler(object):
             method = getattr(self, self.request.method.lower())
             result = method(*self.path_args, **self.path_kwargs)
             if result is not None:
+                # 这里之所以会将 result 在 yield 一次，是因为 Handler
+                # 内处理相应请求的方法可能会返回一个需要异步执行的动作，一旦
+                # yield，则有机会将该对象加入到 IOLoop 的执行队列中，并最终
+                # 达到异步执行的目的。
                 result = yield result
             if self._auto_finish and not self._finished:
                 self.finish()
@@ -2052,10 +2060,13 @@ class _RequestDispatcher(httputil.HTTPMessageDelegate):
         if self.stream_request_body:
             self.request.body.set_result(None)
         else:
-            # 根据 HTTP 请求信息来把 body 中包含的数据 parse 成字典
+            # 根据 HTTP 请求信息来把 body 中包含的数据 parse 成字典。这些
+            # 参数最终会保存在 _RequestHandler 对象的 request.arguments 字典中。
+            # 在 Handler 中调用 get_argument 这类的方法是就是从这里 parse
+            # 的结果里面取出来的。
             self.request.body = b''.join(self.chunks)
             self.request._parse_body()
-            # 执行我们定义的 Handler 从而返回结果
+            # 执行我们定义的 Handler 从而返回结果。
             self.execute()
 
     def on_connection_close(self):

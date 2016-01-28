@@ -217,10 +217,12 @@ class HTTP1Connection(httputil.HTTPConnection):
                 # We've been detached.
                 need_delegate_close = False
                 raise gen.Return(False)
+
             skip_body = False
+
             if self.is_client:
-                # 如果使用这个连接的对象是客户端类型的，则进行头信息以及
-                # HTTP 状态码来决定是否继续读取 body 数据
+                # 对于客户端而言如果使用这个连接的对象是客户端类型的，则进
+                # 行头信息以及 HTTP 状态码来决定是否继续读取 body 数据。
                 if (self._request_start_line is not None and
                         self._request_start_line.method == 'HEAD'):
                     skip_body = True
@@ -241,11 +243,14 @@ class HTTP1Connection(httputil.HTTPConnection):
                     # in the case of a 100-continue.  Document or change?
                     yield self._read_message(delegate)
             else:
+                # 对于服务端而言，不存在需要跳过 body 数据的情况。
                 if (headers.get("Expect") == "100-continue" and
+                    # 处理头中包含『Expect: 100-continue』的客户端请求。
                         not self._write_finished):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
 
             if not skip_body:
+                import ipdb; ipdb.set_trace()
                 body_future = self._read_body(
                     start_line.code if self.is_client
                     else 0, headers, delegate)
@@ -267,7 +272,10 @@ class HTTP1Connection(httputil.HTTPConnection):
             self._read_finished = True
             if not self._write_finished or self.is_client:
                 # 服务端在这里便会调用到匹配到的 handler
-                # 来向请求方写回返回数据
+                # 来向请求方写回返回数据。
+                # 这时 _RequestDispatcher 对象中已经保有了 header 和 body 的数
+                # 据，可以稍微处理一下（例如将表单数据 parse 一下）作为参数交给
+                # Handler 处理了。
                 need_delegate_close = False
                 with _ExceptionLoggingContext(app_log):
                     delegate.finish()
@@ -559,6 +567,7 @@ class HTTP1Connection(httputil.HTTPConnection):
 
     def _read_body(self, code, headers, delegate):
         if "Content-Length" in headers:
+            # 一般情况下，POST 过来的请求会走这一块的逻辑。
             if "Transfer-Encoding" in headers:
                 # Response cannot contain both Content-Length and
                 # Transfer-Encoding headers.
@@ -608,6 +617,12 @@ class HTTP1Connection(httputil.HTTPConnection):
             content_length -= len(body)
             if not self._write_finished or self.is_client:
                 with _ExceptionLoggingContext(app_log):
+                    # 这里会一路调用到 _RequestDispatcher 的 data_received
+                    # 方法，并将读取到的 body 数据 append 到 _RequestDispatcher
+                    # 对象的 chunks 数组中。这个时候请求的 body 不一定读完了，
+                    # 所以 append 也仅是 body 数据的一部分。等 _read_fixed_body
+                    # 正常地执行完毕时，body 的数据才读取完毕，并以数组的形式
+                    # 存储在 _RequestDispatcher 的 chunks 中。
                     ret = delegate.data_received(body)
                     if ret is not None:
                         yield ret

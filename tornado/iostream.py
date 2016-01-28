@@ -312,6 +312,7 @@ class BaseIOStream(object):
             Added the ``partial`` argument.  The callback argument is now
             optional and a `.Future` will be returned if it is omitted.
         """
+        # 从 IOStream 中读取制定字节数的数据。
         future = self._set_read_callback(callback)
         assert isinstance(num_bytes, numbers.Integral)
         self._read_bytes = num_bytes

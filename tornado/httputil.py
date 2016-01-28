@@ -686,6 +686,12 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
         gen_log.warning("Unsupported Content-Encoding: %s",
                         headers['Content-Encoding'])
         return
+    # HTTP 协议中定义了两种形式的表单提交方式（还有一种 raw 格式，算作未定义）。
+    # 一种是用『&』符号分割的『application/x-www-form-urlencoded』形式，一种是
+    # 自定义 boundary 的『multipart/form-data』形式，具体可参考：
+    # https://www.w3.org/TR/html401/interact/forms.html#h-17.13.4
+
+    # application/x-www-form-urlencoded 形式
     if content_type.startswith("application/x-www-form-urlencoded"):
         try:
             uri_arguments = parse_qs_bytes(
@@ -697,6 +703,7 @@ def parse_body_arguments(content_type, body, arguments, files, headers=None):
         for name, values in uri_arguments.items():
             if values:
                 arguments.setdefault(name, []).extend(values)
+    # multipart/form-data 形式
     elif content_type.startswith("multipart/form-data"):
         try:
             fields = content_type.split(";")

@@ -258,6 +258,10 @@ def _make_coroutine_wrapper(func, replace_callback):
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        # 这个 future 对象是用来存储 coroutine 执行完毕后的结果的。结果通常有
+        # 两种来源，一个是在 coroutine 中 yield Return 对象，另一种则是
+        # coroutine 作为 generator 执行完毕后 raise
+        # StopIteration，并有结果数据存储在 StopIteration 这个异常对象中。
         future = TracebackFuture()
 
         if replace_callback and 'callback' in kwargs:
@@ -295,6 +299,10 @@ def _make_coroutine_wrapper(func, replace_callback):
                 except Exception:
                     future.set_exc_info(sys.exc_info())
                 else:
+                    # Runner 负责执行一个 coroutine，如果 coroutine 中的异步
+                    # 操作已经完成，则 future 会被填充该操作的结果，否则 future
+                    # 会继续处于等待结果的状态，并紧接着在下一行代码返回给
+                    # coroutine 的调用者。
                     Runner(result, future, yielded)
                 try:
                     return future
