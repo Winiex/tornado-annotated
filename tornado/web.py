@@ -870,6 +870,7 @@ class RequestHandler(object):
         chunk = b"".join(self._write_buffer)
         self._write_buffer = []
         if not self._headers_written:
+            # 若还没有写头信息，则联通返回的头信息一起写入 response 中。
             self._headers_written = True
             for transform in self._transforms:
                 self._status_code, self._headers, chunk = \

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding:utf-8 -*-
 #
 # Copyright 2012 Facebook
 #
@@ -21,7 +22,8 @@ a mostly-compatible `Future` class designed for use from coroutines,
 as well as some utility functions for interacting with the
 `concurrent.futures` package.
 """
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import functools
 import platform
@@ -500,8 +502,9 @@ def chain_future(a, b):
         assert future is a
         if b.done():
             return
-        if (isinstance(a, TracebackFuture) and isinstance(b, TracebackFuture)
-                and a.exc_info() is not None):
+        if (isinstance(a, TracebackFuture) and
+                isinstance(b, TracebackFuture) and
+                a.exc_info() is not None):
             b.set_exc_info(a.exc_info())
         elif a.exception() is not None:
             b.set_exception(a.exception())
