@@ -111,6 +111,9 @@ class StackContext(object):
         self.active = True
 
     def _deactivate(self):
+        # 这个函数是 with StackContext() as result 中的 result。当 with 语句的
+        # 调用者在其作用范围内不希望继续保有 context 时，可以手动调用 result() 来
+        # 达到跳出 context 的效果。
         self.active = False
 
     # StackContext protocol
@@ -263,28 +266,41 @@ def wrap(fn):
         return fn
 
     # Capture current stack head
-    # TODO: Any other better way to store contexts and update them in wrapped function?
+    # TODO: Any other better way to store contexts
+    # and update them in wrapped function?
+    # 将 _state.contexts 作为 list 对象的成员捕获。用此手法，是因为 list 的
+    # 内容是保存在堆内存上的，不会因为 wrap 函数的调用栈被销毁而丢失掉，这样下面的
+    # null_wrapper 与 wrapped 等函数中保存的 cap_contexts 引用便一直是有效的。
     cap_contexts = [_state.contexts]
 
     if not cap_contexts[0][0] and not cap_contexts[0][1]:
         # Fast path when there are no active contexts.
         def null_wrapper(*args, **kwargs):
             try:
+                # 等到 null_wrapper 被运行的时候，_state 对象中保有的 context 信息
+                # 已经不是之前 cap_contexts 所捕获的了，这个时候就需要在执行 fn 之前
+                # 将 _state.contexts 赋值为之前捕获的 context 信息了。
                 current_state = _state.contexts
                 _state.contexts = cap_contexts[0]
                 return fn(*args, **kwargs)
             finally:
+                # 等 fn 执行完毕后，会将 context 信息还原。
                 _state.contexts = current_state
         null_wrapper._wrapped = True
         return null_wrapper
 
     def wrapped(*args, **kwargs):
+        # 函数被 wrapped decorate 后，便拥有了使用 stack context 的能力。
         ret = None
         try:
             # Capture old state
             current_state = _state.contexts
 
             # Remove deactivated items
+            # 在本文件前面定义的那些 Context 类都会在 with 语句中返回一个
+            # _deactivate 方法供调用者来使用，进而将 Context 对象中的 active
+            # 设置为 False。这个 False 便在这里起了作用。所有 active == False
+            # 的 Context 都会在这里被过滤掉。
             cap_contexts[0] = contexts = _remove_deactivated(cap_contexts[0])
 
             # Force new state
@@ -304,7 +320,8 @@ def wrap(fn):
                     n.enter()
                     last_ctx += 1
                 except:
-                    # Exception happened. Record exception info and store top-most handler
+                    # Exception happened. Record exception
+                    # info and store top-most handler
                     exc = sys.exc_info()
                     top = n.old_contexts[1]
 
@@ -316,11 +333,13 @@ def wrap(fn):
                     exc = sys.exc_info()
                     top = contexts[1]
 
-            # If there was exception, try to handle it by going through the exception chain
+            # If there was exception, try to handle it by
+            # going through the exception chain
             if top is not None:
                 exc = _handle_exception(top, exc)
             else:
-                # Otherwise take shorter path and run stack contexts in reverse order
+                # Otherwise take shorter path and run
+                # stack contexts in reverse order
                 while last_ctx > 0:
                     last_ctx -= 1
                     c = stack[last_ctx]
@@ -334,7 +353,8 @@ def wrap(fn):
                 else:
                     top = None
 
-                # If if exception happened while unrolling, take longer exception handler path
+                # If if exception happened while unrolling,
+                # take longer exception handler path
                 if top is not None:
                     exc = _handle_exception(top, exc)
 

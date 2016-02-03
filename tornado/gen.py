@@ -1140,7 +1140,7 @@ class Runner(object):
 
         if not self.future.done() or self.future is moment:
             # 如果 future 还没有收到结果，不是 done 的状态，则将其添加到 IOLoop
-            # 实例中，在后续某一次 Event Loop 中，future 被赋予了结果后在去执行
+            # 实例中，在后续某一次 Event Loop 中，future 被赋予了结果后再去执行
             # run 方法，从而让 coroutine 获得结果并继续执行下去。
             self.io_loop.add_future(
                 self.future, lambda f: self.run())

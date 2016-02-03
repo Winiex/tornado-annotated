@@ -137,7 +137,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
     """
     if reuse_port and not hasattr(socket, "SO_REUSEPORT"):
         raise ValueError("the platform doesn't support SO_REUSEPORT")
-
+    # sockets 之所以是数组，是因为一台机器可能有多块实体、虚拟网卡，并且网卡可能同时
+    # 支持 IPv4 与 IPv6，这样服务器要监听的 socket 就不止一个了。
     sockets = []
     if address == "":
         address = None
@@ -149,6 +150,7 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
         # http://bugs.python.org/issue16208
         family = socket.AF_INET
     if flags is None:
+        # 如果没有指定 flags，则默认让产生的 socket 是可以监听请求的。
         flags = socket.AI_PASSIVE
     bound_port = None
     for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,

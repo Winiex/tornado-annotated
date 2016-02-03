@@ -250,7 +250,6 @@ class HTTP1Connection(httputil.HTTPConnection):
                     self.stream.write(b"HTTP/1.1 100 (Continue)\r\n\r\n")
 
             if not skip_body:
-                import ipdb; ipdb.set_trace()
                 body_future = self._read_body(
                     start_line.code if self.is_client
                     else 0, headers, delegate)
@@ -761,6 +760,8 @@ class HTTP1ServerConnection(object):
             while True:
                 conn = HTTP1Connection(self.stream, False,
                                        self.params, self.context)
+                # 这里的 delegate 是 httpserver.HTTPServer 对象，这是因为它
+                # 继承了 httputil.HTTPServerConnectionDelegate 类。
                 request_delegate = delegate.start_request(self, conn)
                 try:
                     ret = yield conn.read_response(request_delegate)
