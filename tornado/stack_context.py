@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Copyright 2010 Facebook
 #
@@ -67,7 +68,8 @@ Here are a few rules of thumb for when it's necessary:
   block that references your `StackContext`.
 """
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import sys
 import threading
@@ -82,11 +84,29 @@ class StackContextInconsistentError(Exception):
 class _State(threading.local):
     def __init__(self):
         self.contexts = (tuple(), None)
+
+# _state 是实现 stack context 机制的核心。它是一个与 thread 绑定的变量，
+# 这意味着不同的 thread 会单独拥有自己的一份 _state。
+# _state 里面包含的是上下文信息，其数据结构类似于
+# tuple(tuple(old_context1, old_context2), current_context)。
+# context 都是由各个 Context 进行手动管理的，详细逻辑可以参考下面的
+# StackContext。
 _state = _State()
 
 
+
+# StackContext、NullContext、ExceptionStackContext 这三个 Context，
+# 只会对非回调代码起作用，如果希望其对回调代码起作用，则需要配合 wrap 函数
+# 来将回调函数封装一层，带上当时的 context，这是回调代码和非回调就都处于相同的
+# context 下了，其代码行为便会趋同，例如，抛出的 Exception 的信息是一样的。
+
+# StackContext 的样例可以参见：
+# http://tornadokevinlee.readthedocs.org/en/latest/stack_context.html
+# 简而言之，调用者初始化时传入一个 context （这个是指 Python 中的 context），
+# StackContext 会将其加入 Tornado 的 stack context。
 class StackContext(object):
-    """Establishes the given context as a StackContext that will be transferred.
+    """Establishes the given context as a StackContext that will be
+    transferred.
 
     Note that the parameter is a callable that returns a context
     manager, not the context itself.  That is, where for a
@@ -112,8 +132,8 @@ class StackContext(object):
 
     def _deactivate(self):
         # 这个函数是 with StackContext() as result 中的 result。当 with 语句的
-        # 调用者在其作用范围内不希望继续保有 context 时，可以手动调用 result() 来
-        # 达到跳出 context 的效果。
+        # 调用者在其作用范围内不希望继续保有 context 时，可以手动调用 result()
+        # 来达到跳出 context 的效果。
         self.active = False
 
     # StackContext protocol
@@ -212,6 +232,8 @@ class ExceptionStackContext(object):
             self.new_contexts = None
 
 
+# NullContext，顾名思义，在这个 context 之下，_state 是空的，这样会让 context 内的
+# 代码不受其他 context 的影响。
 class NullContext(object):
     """Resets the `StackContext`.
 
@@ -253,6 +275,18 @@ def _remove_deactivated(contexts):
     return (stack_contexts, head)
 
 
+# 对于一个 callback 而言，只有用 stack_context.wrap 之后，它才会在执行时
+# 收到 _state 中保存的 context 信息的影响。
+# 类似于：
+#
+# with ExceptionStackContext():
+#     ioloop.add_callback(callback)
+#
+# 这样的代码，是不会在 callback 出现异常时捕获到异常的。
+# 正确的写法应该是：
+#
+# with ExceptionStackContext():
+#     ioloop.add_callback(stack_context.wrap(callback))
 def wrap(fn):
     """Returns a callable object that will restore the current `StackContext`
     when executed.

@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*-
 #
 # Copyright 2011 Facebook
 #
@@ -16,7 +17,8 @@
 
 """Miscellaneous network utility code."""
 
-from __future__ import absolute_import, division, print_function, with_statement
+from __future__ import absolute_import, division, \
+    print_function, with_statement
 
 import errno
 import os
@@ -49,7 +51,8 @@ try:
 except NameError:
     xrange = range  # py3
 
-if hasattr(ssl, 'match_hostname') and hasattr(ssl, 'CertificateError'):  # python 3.2+
+if hasattr(ssl, 'match_hostname') and \
+        hasattr(ssl, 'CertificateError'):  # python 3.2+
     ssl_match_hostname = ssl.match_hostname
     SSLCertificateError = ssl.CertificateError
 elif ssl is None:
@@ -153,7 +156,8 @@ def bind_sockets(port, address=None, family=socket.AF_UNSPEC,
         # 如果没有指定 flags，则默认让产生的 socket 是可以监听请求的。
         flags = socket.AI_PASSIVE
     bound_port = None
-    for res in set(socket.getaddrinfo(address, port, family, socket.SOCK_STREAM,
+    for res in set(socket.getaddrinfo(address, port,
+                                      family, socket.SOCK_STREAM,
                                       0, flags)):
         af, socktype, proto, canonname, sockaddr = res
         if (sys.platform == 'darwin' and address == 'localhost' and
@@ -479,14 +483,16 @@ def ssl_options_to_context(ssl_options):
     to use features like SNI or NPN.
     """
     if isinstance(ssl_options, dict):
-        assert all(k in _SSL_CONTEXT_KEYWORDS for k in ssl_options), ssl_options
+        assert all(k in _SSL_CONTEXT_KEYWORDS
+                   for k in ssl_options), ssl_options
     if (not hasattr(ssl, 'SSLContext') or
             isinstance(ssl_options, ssl.SSLContext)):
         return ssl_options
     context = ssl.SSLContext(
         ssl_options.get('ssl_version', ssl.PROTOCOL_SSLv23))
     if 'certfile' in ssl_options:
-        context.load_cert_chain(ssl_options['certfile'], ssl_options.get('keyfile', None))
+        context.load_cert_chain(
+            ssl_options['certfile'], ssl_options.get('keyfile', None))
     if 'cert_reqs' in ssl_options:
         context.verify_mode = ssl_options['cert_reqs']
     if 'ca_certs' in ssl_options:
