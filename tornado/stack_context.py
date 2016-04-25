@@ -99,6 +99,8 @@ _state = _State()
 # 只会对非回调代码起作用，如果希望其对回调代码起作用，则需要配合 wrap 函数
 # 来将回调函数封装一层，带上当时的 context，这是回调代码和非回调就都处于相同的
 # context 下了，其代码行为便会趋同，例如，抛出的 Exception 的信息是一样的。
+# 这些类里面的 enter、exit 是为了 wrap 函数准备的，__enter__、__exit__
+# 是为了 with 语句准备的。
 
 # StackContext 的样例可以参见：
 # http://tornadokevinlee.readthedocs.org/en/latest/stack_context.html
@@ -184,6 +186,13 @@ class StackContext(object):
             self.new_contexts = None
 
 
+# 使用了 ExceptionStackContext 后，可以让非回调代码和回调代码的异常处理行为一致。
+# 进而你可以这样写你的代码：
+#
+# with ExceptionStackContext():
+#     ioloop.add_callback(stack_context.wrap(callback))
+#
+# callback 抛出的异常也能够在调用处捕获。
 class ExceptionStackContext(object):
     """Specialization of StackContext for exception handling.
 
